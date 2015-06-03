@@ -625,6 +625,7 @@ static task_t *task_listen(task_t *listen_task)
 }
 
 
+
 // task_upload(t)
 //Handles an upload request from another peer.
 //First reads the request into the task buffer, then serves the peer
@@ -649,7 +650,24 @@ static void task_upload(task_t *t)
     goto exit;
   }
   t->head = t->tail = 0;
-
+  
+  struct dirent **namelist;
+  int i,n;
+  char found = 'f';
+  DIR *dir;
+  if ((dir = opendir(".")) == NULL)
+    die("open directory: %s", strerror(errno));
+  n = scandir(".", &namelist, 0, alphasort);
+  for (i = 2; i < n; i++) {
+        if(!strncmp(namelist[i]->d_name, t->filename, strlen(namelist[i]->d_name)))
+			found = 't';
+  }        
+  free(namelist);
+  if(found == 'f')
+  {
+	 error("* not in current directory %s", t->filename);
+	 goto exit;
+  }
   t->disk_fd = open(t->filename, O_RDONLY);
   if (t->disk_fd == -1) {
     error("* Cannot open file %s", t->filename);
