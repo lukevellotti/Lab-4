@@ -18,9 +18,9 @@ Student ID:
 Email: 
 
 # Partner 2 (if you're working in a team)
-Name: 
-Student ID: 
-Email: 
+Name: Akash Malik	
+Student ID: 704332974
+Email: akash5malik@gmail.com
 
 # EXERCISE 1: What method you used to make your peer download and upload
 #    files in parallel?  (~1-3 sentences)
