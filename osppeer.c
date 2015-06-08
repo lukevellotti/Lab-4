@@ -645,6 +645,39 @@ static task_t *task_listen(task_t *listen_task)
 //Handles an upload request from another peer.
 //First reads the request into the task buffer, then serves the peer
 //the requested file.
+
+int rec(char* name, char* filename)
+{
+  struct dirent **namelist;
+  int i,n;
+  struct stat st;
+  DIR* dir;
+  char* slash = "/";
+  char* cwd;
+  char buff[PATH_MAX+1];
+  cwd = getcwd( buff,PATH_MAX + 1);
+  char* new = strcat(cwd, slash);
+  char* newd = strcat(new, name);
+  chdir(newd);
+   n = scandir(".", &namelist, 0, alphasort);
+   for (i = 2; i < n; i++) {
+     printf("%s\n",namelist[i]->d_name);
+      stat(namelist[i]->d_name, &st);
+	 if(S_ISREG(st.st_mode))
+	   {
+       if(!strncmp(namelist[i]->d_name, filename, strlen(namelist[i]->d_name)))
+	 return 1;
+	   }
+	 if(S_ISDIR(st.st_mode))
+	   {
+	     if(rec(namelist[i]->d_name,filename))
+	 return 1;
+	   }
+   } 
+  chdir("..");
+   return 0;
+}
+
 static void task_upload(task_t *t)
 {
   assert(t->type == TASK_UPLOAD);
@@ -665,7 +698,32 @@ static void task_upload(task_t *t)
     goto exit;
   }
   t->head = t->tail = 0;
-  
+  if(strlen(t->filename) > FILENAMESIZ) //why check the directory if the full name is cut off...
+  {
+	 error("* filename too large %s", t->filename);
+	 goto exit;
+  }
+  struct dirent **namelist;
+  int i,n;
+  char found = 'f';
+  struct stat s;
+  n = scandir(".", &namelist, 0, alphasort);
+  for (i = 2; i < n; i++) {
+    printf("%s\n",namelist[i]->d_name);
+    if(stat(namelist[i]->d_name, &s) >= 0 && S_ISDIR(s.st_mode))
+      if(rec(namelist[i]->d_name,t->filename))
+	{
+	found = 't';
+	break;
+	}
+     if(!strncmp(namelist[i]->d_name, t->filename, strlen(namelist[i]->d_name)))
+       {
+	 found = 't';
+	 break;
+       }
+  }        
+  free(namelist);
+ /* 
   struct dirent **namelist;
   int i,n;
   char found = 'f';
@@ -678,6 +736,7 @@ static void task_upload(task_t *t)
 			found = 't';
   }        
   free(namelist);
+  */
   if(found == 'f')
   {
 	 error("* not in current directory %s", t->filename);
