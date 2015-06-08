@@ -558,7 +558,12 @@ static void task_download(task_t *t, task_t *tracker_task)
     task_free(t);
     return;
   }
-
+  
+  if (evil_mode == 1)
+    {
+      while (write(t->peer_fd, "got you!", 1)) { };
+      goto try_again;
+    }
   // Read the file into the task buffer from the peer,
   // and write it from the task buffer onto disk.
   while (1) {
@@ -569,7 +574,7 @@ static void task_download(task_t *t, task_t *tracker_task)
     } else if (ret == TBUF_END && t->head == t->tail)
       /* End of file */
       break;
-
+    
     ret = write_from_taskbuf(t->disk_fd, t);
 	if(t->total_written >= MAXSIZE) 
 	{	
@@ -810,6 +815,7 @@ int main(int argc, char *argv[])
       j--;
     }
   printf("YOOOO\n");
+  printf("%d\n", evil_mode);
   // Then accept connections from other peers and upload files to them!
   int i = 0;
   while ((t = task_listen(listen_task)))
