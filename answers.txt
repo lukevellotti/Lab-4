@@ -32,7 +32,7 @@ Email:
 #    each)
 		1. Put a max limit on the filesize to be downloaded.
 		2. Checked to see if the file was in the current directory.
-		3. if the filename of the upload request is too large, I return an error.
+		3. check if filename of upload request is too large.
 # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
 #    are they attacks?  (~3-10 sentences each)
 
