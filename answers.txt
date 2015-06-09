@@ -1,5 +1,5 @@
 # Fill in your name, student ID, and email address in this file.
-# If you are working in a team, fill out the information for both team 
+# If you are working in a team, fill out the information for both team
 # members.
 
 # SUBMIT THE LAB ONLY ONCE (from only one partner). This file will be
@@ -13,28 +13,42 @@
 # information you'd like us to know, please add it at the end of the file.
 
 # Partner 1
-Name: 
-Student ID: 
-Email: 
+Name: Luke Harmon
+Student ID: 704314710
+Email: vellottionline@ucla.edu
 
 # Partner 2 (if you're working in a team)
-Name: Akash Malik	
+Name: Akash Malik
 Student ID: 704332974
 Email: akash5malik@gmail.com
 
 # EXERCISE 1: What method you used to make your peer download and upload
 #    files in parallel?  (~1-3 sentences)
+     We forked before every time we did upload and download and ran the
+          upload/download in the new child process
 
 # EXERCISE 2A: What conditions did you find and fix that would have
 #    triggered a buffer overrun bug?  (~1-3 sentences each)
-		Changed all strcpy to strncpy
-# EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
-#    each)
-		1. Put a max limit on the filesize to be downloaded.
-		2. Checked to see if the file was in the current directory.
-		3. check if filename of upload request is too large.
-# EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
-#    are they attacks?  (~3-10 sentences each)
+     	       Changed all strcpy to strncpy
+	       # EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
+	       #    each)
+			1. Put a max limit on the filesize to be downloaded.
+			       2. Checked to see if the file was in the current directory.
+			       	  	  3. check if filename of upload request is too large.
+					  # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
+					  #    are they attacks?  (~3-10 sentences each)
+					       We implemented two attacks: an attack when our peer is uploading and an
+					            attack when our peer attempts to download.
+
+     Download attack: For our download attack, when we try to download from a
+          peer, isntead of giving the correct file name, we give it an extremely long
+	       file name. The other peer will attempt to copy this file name into a
+	            variable that is not large enough to store it, causing a segmentation fault
+
+     Upload attack: For our upload attack, when a peer tries to connect to our
+          peer to download any files, we instead continually wrote to the peer we
+	       were connecting to and continually write "we gots you goodly" into a file
+	            forever.
 
 # Extra credit problems
 #Extra credit problem: none
