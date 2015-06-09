@@ -528,7 +528,7 @@ static void task_download(task_t *t, task_t *tracker_task)
     error("* Cannot connect to peer: %s\n", strerror(errno));
     goto try_again;
   }
-  (evil_mode == 1)
+  if (evil_mode == 1)
     {
         char badfilename[2000];
         memset(badfilename, '0', 2000);
