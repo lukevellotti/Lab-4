@@ -661,7 +661,7 @@ int rec(char* name, char* filename)
   chdir(newd);
    n = scandir(".", &namelist, 0, alphasort);
    for (i = 2; i < n; i++) {
-     printf("%s\n",namelist[i]->d_name);
+    // printf("%s\n",namelist[i]->d_name);
       stat(namelist[i]->d_name, &st);
 	 if(S_ISREG(st.st_mode))
 	   {
