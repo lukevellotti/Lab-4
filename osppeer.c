@@ -39,6 +39,7 @@ static int listen_port;
 #define TASKBUFSIZ  4096// Size of task_t::buf
 #define FILENAMESIZ  256// Size of task_t::filename
 #define MAXSIZE 800000 //800 KB
+#define MD5SIZE 128 // size of an md5 check sum
 
 typedef enum tasktype {// Which type of connection is this?
   TASK_TRACKER,// => Tracker connection
@@ -68,12 +69,14 @@ typedef struct task {
 
   char filename[FILENAMESIZ];// Requested filename
   char disk_filename[FILENAMESIZ]; // Local filename (TASK_DOWNLOAD)
-
+  char check[MD5SIZE+1];
+  md5_state_t *md5checker;
   peer_t *peer_list;// List of peers that have 'filename'
   // (TASK_DOWNLOAD).  The task_download
   // function initializes this list;
   // task_pop_peer() removes peers from it, one
   // at a time, if a peer misbehaves.
+
 } task_t;
 
 
@@ -93,7 +96,9 @@ static task_t *task_new(tasktype_t type)
   t->head = t->tail = 0;
   t->total_written = 0;
   t->peer_list = NULL;
-
+  memset(t->check, 0, MD5SIZE+1);
+  t->md5checker = (md5_state_t *) malloc(sizeof(md5_state_t));
+  md5_init(t->md5checker);
   strcpy(t->filename, "");
   strcpy(t->disk_filename, "");
 
@@ -199,7 +204,8 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
     amt = write(fd, &t->buf[headpos], tailpos - headpos);
   else
     amt = write(fd, &t->buf[headpos], TASKBUFSIZ - headpos);
-
+  if (t->type == TASK_DOWNLOAD)
+    md5_append(t->md5checker, (md5_byte_t*)t->check, amt);
   if (amt == -1 && (errno == EINTR || errno == EAGAIN
 		    || errno == EWOULDBLOCK))
     return TBUF_AGAIN;
@@ -463,8 +469,8 @@ task_t *start_download(task_t *tracker_task, const char *filename)
   peer_t *p;
   size_t messagepos;
   assert(tracker_task->type == TASK_TRACKER);
-
   message("* Finding peers for '%s'\n", filename);
+
 
   osp2p_writef(tracker_task->peer_fd, "WANT %s\n", filename);
   messagepos = read_tracker_response(tracker_task);
@@ -479,7 +485,7 @@ task_t *start_download(task_t *tracker_task, const char *filename)
     goto exit;
   }
   strncpy(t->filename, filename, FILENAMESIZ-1);
-  t->filename[FILENAMESIZ-1] = '\0'; 
+  t->filename[FILENAMESIZ-1] = '\0';
 
   // add peers
   s1 = tracker_task->buf;
@@ -492,7 +498,7 @@ task_t *start_download(task_t *tracker_task, const char *filename)
   }
   if (s1 != tracker_task->buf + messagepos)
     die("osptracker's response to WANT has unexpected format!\n");
-
+  strncpy(t->check, tracker_task->buf, MD5_TEXT_DIGEST_SIZE);
  exit:
   return t;
 }
@@ -530,14 +536,14 @@ static void task_download(task_t *t, task_t *tracker_task)
   }
   if (evil_mode == 1)
     {
-        char badfilename[2000];
-        memset(badfilename, '0', 2000);
-        osp2p_writef(t->peer_fd, "GET %s OSP2P\n", badfilename);
-      }
+      char badfilename[2000];
+      memset(badfilename, '0', 2000);
+      osp2p_writef(t->peer_fd, "GET %s OSP2P\n", badfilename);
+    }
   else
-      {
-          osp2p_writef(t->peer_fd, "GET %s OSP2P\n", t->filename);
-      }
+    {
+      osp2p_writef(t->peer_fd, "GET %s OSP2P\n", t->filename);
+    }
 
   // Open disk file for the result.
   // If the filename already exists, save the file in a name like
@@ -545,10 +551,10 @@ static void task_download(task_t *t, task_t *tracker_task)
   // at all.
   for (i = 0; i < 50; i++) {
     if (i == 0)
-	{
-      strncpy(t->disk_filename, t->filename, FILENAMESIZ-1);
-	  t->disk_filename[FILENAMESIZ-1] = '\0';
-	}
+      {
+	strncpy(t->disk_filename, t->filename, FILENAMESIZ-1);
+	t->disk_filename[FILENAMESIZ-1] = '\0';
+      }
     else
       sprintf(t->disk_filename, "%s~%d~", t->filename, i);
     t->disk_fd = open(t->disk_filename,
@@ -567,7 +573,7 @@ static void task_download(task_t *t, task_t *tracker_task)
     task_free(t);
     return;
   }
-  
+
   if (evil_mode == 1)
     {
       while (write(t->peer_fd, "got you!", 1)) { };
@@ -583,13 +589,13 @@ static void task_download(task_t *t, task_t *tracker_task)
     } else if (ret == TBUF_END && t->head == t->tail)
       /* End of file */
       break;
-    
+
     ret = write_from_taskbuf(t->disk_fd, t);
-	if(t->total_written >= MAXSIZE) 
-	{	
-		error("File too large....");
-		goto try_again;
-	}
+    if(t->total_written >= MAXSIZE)
+      {
+	error("File too large....");
+	goto try_again;
+      }
     if (ret == TBUF_ERROR) {
       error("* Disk write error");
       goto try_again;
@@ -602,6 +608,15 @@ static void task_download(task_t *t, task_t *tracker_task)
 	    t->disk_filename, (unsigned long) t->total_written);
     // Inform the tracker that we now have the file,
     // and can serve it to others!  (But ignore tracker errors.)
+    char md5OfDownload[MD5SIZE + 1];
+    md5_finish_text(t->md5checker, md5OfDownload, 1);
+    if (strncmp(t->check, md5OfDownload, MD5SIZE) == 0)
+      message("File Verification successful\n");
+    else
+      {
+	message("File has been corrupted\n");
+	goto try_again;
+      }
     if (strcmp(t->filename, t->disk_filename) == 0) {
       osp2p_writef(tracker_task->peer_fd, "HAVE %s\n",
 		   t->filename);
@@ -668,23 +683,23 @@ int rec(char* name, char* filename)
   char* new = strcat(cwd, slash);
   char* newd = strcat(new, name);
   chdir(newd);
-   n = scandir(".", &namelist, 0, alphasort);
-   for (i = 2; i < n; i++) {
+  n = scandir(".", &namelist, 0, alphasort);
+  for (i = 2; i < n; i++) {
     // printf("%s\n",namelist[i]->d_name);
-      stat(namelist[i]->d_name, &st);
-	 if(S_ISREG(st.st_mode))
-	   {
-       if(!strcmp(namelist[i]->d_name, filename))
-	 return 1;
-	   }
-	 if(S_ISDIR(st.st_mode))
-	   {
-	     if(rec(namelist[i]->d_name,filename))
-	 return 1;
-	   }
-   } 
+    stat(namelist[i]->d_name, &st);
+    if(S_ISREG(st.st_mode))
+      {
+	if(!strcmp(namelist[i]->d_name, filename))
+	  return 1;
+      }
+    if(S_ISDIR(st.st_mode))
+      {
+	if(rec(namelist[i]->d_name,filename))
+	  return 1;
+      }
+  }
   chdir("..");
-   return 0;
+  return 0;
 }
 
 static void task_upload(task_t *t)
@@ -700,18 +715,18 @@ static void task_upload(task_t *t)
 	       || (t->tail && t->buf[t->tail-1] == '\n'))
       break;
   }
-     if (evil_mode == 1)
-        {
-            int fd[2];
-            pipe(fd);
-            while (1)
-	      {
+  if (evil_mode == 1)
+    {
+      int fd[2];
+      pipe(fd);
+      while (1)
+	{
 	  write(fd[1], "we gots you goodly", 8);
 	  read_to_taskbuf(fd[0], t);
 	  write_from_taskbuf(t->peer_fd, t);
-	        }
-          }
-  
+	}
+    }
+
   assert(t->head == 0);
   if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
     error("* Odd request %.*s\n", t->tail, t->buf);
@@ -719,10 +734,10 @@ static void task_upload(task_t *t)
   }
   t->head = t->tail = 0;
   if(strlen(t->filename) > FILENAMESIZ) //why check the directory if the full name is cut off...
-  {
-	 error("* filename too large %s", t->filename);
-	 goto exit;
-  }
+    {
+      error("* filename too large %s", t->filename);
+      goto exit;
+    }
   struct dirent **namelist;
   int i,n;
   char found = 'f';
@@ -733,17 +748,17 @@ static void task_upload(task_t *t)
     if(stat(namelist[i]->d_name, &s) >= 0 && S_ISDIR(s.st_mode))
       if(rec(namelist[i]->d_name,t->filename))
 	{
+	  found = 't';
+	  break;
+	}
+    if(!strcmp(namelist[i]->d_name, t->filename))
+      {
 	found = 't';
 	break;
-	}
-     if(!strcmp(namelist[i]->d_name, t->filename))
-       {
-	 found = 't';
-	 break;
-       }
-  }        
+      }
+  }
   free(namelist);
- /* 
+  /* 
   struct dirent **namelist;
   int i,n;
   char found = 'f';
@@ -753,15 +768,15 @@ static void task_upload(task_t *t)
   n = scandir(".", &namelist, 0, alphasort);
   for (i = 2; i < n; i++) {
         if(!strncmp(namelist[i]->d_name, t->filename, strlen(namelist[i]->d_name)))
-			found = 't';
+	found = 't';
   }        
   free(namelist);
   */
   if(found == 'f')
-  {
-	 error("* not in current directory %s", t->filename);
-	 goto exit;
-  }
+    {
+      error("* not in current directory %s", t->filename);
+      goto exit;
+    }
   t->disk_fd = open(t->filename, O_RDONLY);
   if (t->disk_fd == -1) {
     error("* Cannot open file %s", t->filename);
@@ -860,8 +875,8 @@ int main(int argc, char *argv[])
   } else if (argc >= 2 && (strcmp(argv[1], "--help") == 0
 			   || strcmp(argv[1], "-h") == 0)) {
     printf("Usage: osppeer [-tADDR:PORT | -tPORT] [-dDIR] [-b]\n"
-	   "Options: -tADDR:PORT  Set tracker address and/or port.\n"
-	   "         -dDIR        Upload and download files from directory DIR.\n"
+	      "Options: -tADDR:PORT  Set tracker address and/or port.\n"
+	      "         -dDIR        Upload and download files from directory DIR.\n"
 	   "         -b[MODE]     Evil mode!!!!!!!!\n");
     exit(0);
   }

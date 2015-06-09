@@ -35,10 +35,11 @@ Email: akash5malik@gmail.com
 			1. Put a max limit on the filesize to be downloaded.
 			       2. Checked to see if the file was in the current directory.
 			       	  	  3. check if filename of upload request is too large.
-					  # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
-					  #    are they attacks?  (~3-10 sentences each)
-					       We implemented two attacks: an attack when our peer is uploading and an
-					            attack when our peer attempts to download.
+					     	   4. Checked to see if file got corrupted using md5 checksum
+						   # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
+						   #    are they attacks?  (~3-10 sentences each)
+						        We implemented two attacks: an attack when our peer is uploading and an
+							     attack when our peer attempts to download.
 
      Download attack: For our download attack, when we try to download from a
           peer, isntead of giving the correct file name, we give it an extremely long
@@ -51,6 +52,10 @@ Email: akash5malik@gmail.com
 	            forever.
 
 # Extra credit problems
-#Extra credit problem: none
+Extra credit problem:
+
+Implemented the md5 checksum, which checks if the md5 sum computed when the file
+was uploaded matches the md5sum from when the file is downloaded. If not, then
+file must have been corrupted, and we attempt to download from a different peer.
 
 # Add any other information you'd like us to know below this line.
